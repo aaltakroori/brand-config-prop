@@ -1,1 +1,2 @@
 # brand-config-prop
+Hi
