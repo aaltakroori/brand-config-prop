@@ -75,9 +75,20 @@
         .remove-btn:hover {
             background-color: #c82333;
         }
-        
+
         .upload-container {
             margin-top: 20px;
+        }
+
+        .error {
+            color: red;
+            font-size: 0.9em;
+        }
+
+        .note {
+            margin: 10px 0;
+            font-size: 0.9em;
+            color: #555;
         }
     </style>
 </head>
@@ -100,10 +111,8 @@
         </form>
 
         <div class="upload-container">
-            <h2>Upload CSV for Comparison</h2>
-            <input type="file" id="fileInput" accept=".csv">
-            <button type="button" id="compareBtn">Compare</button>
-            <div id="comparisonResults"></div>
+            <h4>Upload CSV for Comparison (at least 5 lines)</h4>
+            <input type="file" id="fileInput" accept=".csv" required>
         </div>
 
         <button type="submit" form="skuForm">Submit</button>
@@ -112,7 +121,6 @@
     <script>
         document.getElementById('addPartBtn').addEventListener('click', addPart);
         document.getElementById('skuForm').addEventListener('submit', handleSubmit);
-        document.getElementById('compareBtn').addEventListener('click', compareCSV);
 
         let partCounter = 0;
 
@@ -134,22 +142,34 @@
             `;
             partTypeSelect.addEventListener('change', (e) => handlePartTypeChange(e, partCounter));
 
+            const rangeNote = document.createElement('div');
+            rangeNote.classList.add('note');
+            rangeNote.textContent = "Enter the character count range (minimum and maximum) for this segment:";
+
             const rangeStartInput = document.createElement('input');
             rangeStartInput.setAttribute('name', `rangeStart-${partCounter}`);
             rangeStartInput.setAttribute('placeholder', 'Start');
             rangeStartInput.classList.add('range-input');
             rangeStartInput.style.display = 'inline-block';
+            rangeStartInput.addEventListener('blur', () => validateRange(partCounter));
 
             const rangeEndInput = document.createElement('input');
             rangeEndInput.setAttribute('name', `rangeEnd-${partCounter}`);
             rangeEndInput.setAttribute('placeholder', 'End');
             rangeEndInput.classList.add('range-input');
             rangeEndInput.style.display = 'inline-block';
+            rangeEndInput.addEventListener('blur', () => validateRange(partCounter));
 
             const specialCharInput = document.createElement('input');
             specialCharInput.setAttribute('name', `specialChar-${partCounter}`);
             specialCharInput.setAttribute('placeholder', 'Enter special character');
             specialCharInput.style.display = 'none';
+            specialCharInput.addEventListener('input', () => validateSpecialChar(partCounter));
+
+            const errorDiv = document.createElement('div');
+            errorDiv.classList.add('error');
+            errorDiv.setAttribute('id', `error-${partCounter}`);
+            errorDiv.style.display = 'none';
 
             const removeBtn = document.createElement('button');
             removeBtn.classList.add('remove-btn');
@@ -159,8 +179,10 @@
 
             partContainer.appendChild(partTypeLabel);
             partContainer.appendChild(partTypeSelect);
+            partContainer.appendChild(rangeNote);
             partContainer.appendChild(rangeStartInput);
             partContainer.appendChild(rangeEndInput);
+            partContainer.appendChild(errorDiv);
             partContainer.appendChild(specialCharInput);
             partContainer.appendChild(removeBtn);
 
@@ -172,15 +194,50 @@
             const rangeStartInput = document.querySelector(`input[name="rangeStart-${partNumber}"]`);
             const rangeEndInput = document.querySelector(`input[name="rangeEnd-${partNumber}"]`);
             const specialCharInput = document.querySelector(`input[name="specialChar-${partNumber}"]`);
+            const errorDiv = document.getElementById(`error-${partNumber}`);
 
             if (selectedType === 'special') {
                 rangeStartInput.style.display = 'none';
                 rangeEndInput.style.display = 'none';
                 specialCharInput.style.display = 'block';
+                errorDiv.style.display = 'none';
             } else {
                 rangeStartInput.style.display = 'inline-block';
                 rangeEndInput.style.display = 'inline-block';
                 specialCharInput.style.display = 'none';
+                errorDiv.style.display = 'none';
+            }
+        }
+
+        function validateRange(partNumber) {
+            const rangeStartInput = document.querySelector(`input[name="rangeStart-${partNumber}"]`);
+            const rangeEndInput = document.querySelector(`input[name="rangeEnd-${partNumber}"]`);
+            const errorDiv = document.getElementById(`error-${partNumber}`);
+
+            const start = parseInt(rangeStartInput.value, 10);
+            const end = parseInt(rangeEndInput.value, 10);
+
+            if (rangeStartInput.value && rangeEndInput.value) {
+                if (isNaN(start) || isNaN(end) || start > end) {
+                    errorDiv.textContent = 'Invalid range. Ensure start <= end.';
+                    errorDiv.style.display = 'block';
+                } else {
+                    errorDiv.style.display = 'none';
+                }
+            } else {
+                errorDiv.style.display = 'none';
+            }
+        }
+
+        function validateSpecialChar(partNumber) {
+            const specialCharInput = document.querySelector(`input[name="specialChar-${partNumber}"]`);
+            const errorDiv = document.getElementById(`error-${partNumber}`);
+
+            if (specialCharInput.value.length > 1) {
+                errorDiv.textContent = 'Please enter only one special character.';
+                errorDiv.style.display = 'block';
+            } else {
+                errorDiv.style.display = 'none';
             }
         }
 
@@ -191,29 +248,73 @@
             const partsData = [];
             const brandCode = formData.get('brandCode');
             const type = formData.get('type');
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            let hasSegments = false;
 
             for (let [key, value] of formData.entries()) {
                 if (key.includes('partType')) {
                     const partNumber = key.split('-')[1];
                     const partType = value;
 
+                    hasSegments = true;
+
                     let partInput;
                     if (partType === 'special') {
                         partInput = formData.get(`specialChar-${partNumber}`);
+                        if (partInput.length !== 1) {
+                            alert('Please enter only one special character.');
+                            return;
+                        }
                         partsData.push({ partType, partInput });
                     } else {
                         const start = formData.get(`rangeStart-${partNumber}`);
                         const end = formData.get(`rangeEnd-${partNumber}`);
-                        partInput = { start, end };
+                        const startNum = parseInt(start, 10);
+                        const endNum = parseInt(end, 10);
+
+                        if (isNaN(startNum) || isNaN(endNum) || startNum >= endNum) {
+                            alert('Please ensure all ranges are valid (start < end).');
+                            return;
+                        }
+
+                        const partInput = { start, end };
                         partsData.push({ partType, partInput });
                     }
                 }
             }
 
+            if (!hasSegments) {
+                alert('Please add at least one segment before submitting.');
+                return;
+            }
+
+            if (!file) {
+                alert("Please upload a CSV file.");
+                return;
+            }
+
+            readCSVAndCompare(file, brandCode, type, partsData);
+        }
+
+        async function readCSVAndCompare(file, brandCode, type, partsData) {
+            const text = await file.text();
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+
+            if (lines.length < 5) {
+                alert("The uploaded file must contain at least 5 lines.");
+                return;
+            }
+
             const regex = generateRegex(partsData);
             const example = generateExample(partsData);
+            const results = lines.map(value => {
+                const isValid = new RegExp(regex, 'i').test(value);
+                return `${value}: ${isValid ? 'Valid' : 'Invalid'}`;
+            });
 
-            alert(`Brand Code: ${brandCode}\nType: ${type}\n\nGenerated Regex: ${regex}\n\nExample: ${example}`);
+            alert(`Brand Code: ${brandCode}\nType: ${type}\n\nGenerated Regex: ${regex}\nExample: ${example}\n\nResults:\n${results.join('\n')}`);
         }
 
         function generateRegex(parts) {
@@ -248,51 +349,6 @@
                         return '';
                 }
             }).join('');
-        }
-
-        async function compareCSV() {
-            const fileInput = document.getElementById('fileInput');
-            const file = fileInput.files[0];
-            if (!file) {
-                alert("Please upload a CSV file.");
-                return;
-            }
-
-            const regex = generateRegexFromForm();
-            const resultsContainer = document.getElementById('comparisonResults');
-            resultsContainer.innerHTML = '';
-
-            const text = await file.text();
-            const lines = text.split('\n').map(line => line.trim()).filter(line => line);
-
-            lines.forEach(value => {
-                const isValid = new RegExp(regex, 'i').test(value); // Added 'i' flag for case-insensitivity
-                const resultText = `${value}: ${isValid ? 'Valid' : 'Invalid'}`;
-                const resultDiv = document.createElement('div');
-                resultDiv.textContent = resultText;
-                resultsContainer.appendChild(resultDiv);
-            });
-        }
-
-        function generateRegexFromForm() {
-            const parts = [];
-            for (let i = 1; i <= partCounter; i++) {
-                const partType = document.querySelector(`select[name="partType-${i}"]`);
-                if (partType) {
-                    const typeValue = partType.value;
-                    let partInput;
-                    if (typeValue === 'special') {
-                        partInput = document.querySelector(`input[name="specialChar-${i}"]`).value;
-                        parts.push({ partType: typeValue, partInput });
-                    } else {
-                        const start = document.querySelector(`input[name="rangeStart-${i}"]`).value;
-                        const end = document.querySelector(`input[name="rangeEnd-${i}"]`).value;
-                        partInput = { start, end };
-                        parts.push({ partType: typeValue, partInput });
-                    }
-                }
-            }
-            return generateRegex(parts);
         }
     </script>
 </body>
