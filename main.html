@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SKU Format Form</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            width: 50%;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            box-shadow: 0px 0px 10px 0px rgba(0, 0, 0, 0.1);
+            margin-top: 50px;
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0 10px 0;
+            display: inline-block;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .range-input {
+            width: 48%;
+            display: inline-block;
+        }
+
+        button {
+            padding: 10px 15px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        .part-container {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+
+        .remove-btn {
+            background-color: #dc3545;
+            color: white;
+            padding: 5px;
+            margin-top: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .remove-btn:hover {
+            background-color: #c82333;
+        }
+        
+        .upload-container {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Enter SKU Format</h2>
+        <form id="skuForm">
+            <label for="brandCode">Brand Code:</label>
+            <input type="text" id="brandCode" name="brandCode" required>
+
+            <label for="type">Type:</label>
+            <select id="type" name="type" required>
+                <option value="supplier_style">Supplier Style</option>
+                <option value="supplier_style_colour">Supplier Style Colour</option>
+            </select>
+
+            <div id="partsContainer"></div>
+
+            <button type="button" id="addPartBtn">Add Segment</button>
+        </form>
+
+        <div class="upload-container">
+            <h2>Upload CSV for Comparison</h2>
+            <input type="file" id="fileInput" accept=".csv">
+            <button type="button" id="compareBtn">Compare</button>
+            <div id="comparisonResults"></div>
+        </div>
+
+        <button type="submit" form="skuForm">Submit</button>
+    </div>
+
+    <script>
+        document.getElementById('addPartBtn').addEventListener('click', addPart);
+        document.getElementById('skuForm').addEventListener('submit', handleSubmit);
+        document.getElementById('compareBtn').addEventListener('click', compareCSV);
+
+        let partCounter = 0;
+
+        function addPart() {
+            partCounter++;
+            const partContainer = document.createElement('div');
+            partContainer.classList.add('part-container');
+            partContainer.setAttribute('id', `part-${partCounter}`);
+
+            const partTypeLabel = document.createElement('label');
+            partTypeLabel.textContent = `Segment ${partCounter} Type: `;
+            const partTypeSelect = document.createElement('select');
+            partTypeSelect.setAttribute('name', `partType-${partCounter}`);
+            partTypeSelect.innerHTML = `
+                <option value="alphabetical">Alphabetical</option>
+                <option value="alphanumeric">Alphanumeric</option>
+                <option value="numerical">Numerical</option>
+                <option value="special">Special Character</option>
+            `;
+            partTypeSelect.addEventListener('change', (e) => handlePartTypeChange(e, partCounter));
+
+            const rangeStartInput = document.createElement('input');
+            rangeStartInput.setAttribute('name', `rangeStart-${partCounter}`);
+            rangeStartInput.setAttribute('placeholder', 'Start');
+            rangeStartInput.classList.add('range-input');
+            rangeStartInput.style.display = 'inline-block';
+
+            const rangeEndInput = document.createElement('input');
+            rangeEndInput.setAttribute('name', `rangeEnd-${partCounter}`);
+            rangeEndInput.setAttribute('placeholder', 'End');
+            rangeEndInput.classList.add('range-input');
+            rangeEndInput.style.display = 'inline-block';
+
+            const specialCharInput = document.createElement('input');
+            specialCharInput.setAttribute('name', `specialChar-${partCounter}`);
+            specialCharInput.setAttribute('placeholder', 'Enter special character');
+            specialCharInput.style.display = 'none';
+
+            const removeBtn = document.createElement('button');
+            removeBtn.classList.add('remove-btn');
+            removeBtn.textContent = 'Remove Segment';
+            removeBtn.type = 'button';
+            removeBtn.addEventListener('click', () => partContainer.remove());
+
+            partContainer.appendChild(partTypeLabel);
+            partContainer.appendChild(partTypeSelect);
+            partContainer.appendChild(rangeStartInput);
+            partContainer.appendChild(rangeEndInput);
+            partContainer.appendChild(specialCharInput);
+            partContainer.appendChild(removeBtn);
+
+            document.getElementById('partsContainer').appendChild(partContainer);
+        }
+
+        function handlePartTypeChange(event, partNumber) {
+            const selectedType = event.target.value;
+            const rangeStartInput = document.querySelector(`input[name="rangeStart-${partNumber}"]`);
+            const rangeEndInput = document.querySelector(`input[name="rangeEnd-${partNumber}"]`);
+            const specialCharInput = document.querySelector(`input[name="specialChar-${partNumber}"]`);
+
+            if (selectedType === 'special') {
+                rangeStartInput.style.display = 'none';
+                rangeEndInput.style.display = 'none';
+                specialCharInput.style.display = 'block';
+            } else {
+                rangeStartInput.style.display = 'inline-block';
+                rangeEndInput.style.display = 'inline-block';
+                specialCharInput.style.display = 'none';
+            }
+        }
+
+        function handleSubmit(event) {
+            event.preventDefault();
+
+            const formData = new FormData(document.getElementById('skuForm'));
+            const partsData = [];
+            const brandCode = formData.get('brandCode');
+            const type = formData.get('type');
+
+            for (let [key, value] of formData.entries()) {
+                if (key.includes('partType')) {
+                    const partNumber = key.split('-')[1];
+                    const partType = value;
+
+                    let partInput;
+                    if (partType === 'special') {
+                        partInput = formData.get(`specialChar-${partNumber}`);
+                        partsData.push({ partType, partInput });
+                    } else {
+                        const start = formData.get(`rangeStart-${partNumber}`);
+                        const end = formData.get(`rangeEnd-${partNumber}`);
+                        partInput = { start, end };
+                        partsData.push({ partType, partInput });
+                    }
+                }
+            }
+
+            const regex = generateRegex(partsData);
+            const example = generateExample(partsData);
+
+            alert(`Brand Code: ${brandCode}\nType: ${type}\n\nGenerated Regex: ${regex}\n\nExample: ${example}`);
+        }
+
+        function generateRegex(parts) {
+            return parts.map(part => {
+                switch (part.partType) {
+                    case 'alphabetical':
+                        return `[A-Za-z]{${part.partInput.start},${part.partInput.end}}`;
+                    case 'alphanumeric':
+                        return `[A-Za-z0-9]{${part.partInput.start},${part.partInput.end}}`;
+                    case 'numerical':
+                        return `[0-9]{${part.partInput.start},${part.partInput.end}}`;
+                    case 'special':
+                        return `\\${part.partInput}`;
+                    default:
+                        return '';
+                }
+            }).join('');
+        }
+
+        function generateExample(parts) {
+            return parts.map(part => {
+                switch (part.partType) {
+                    case 'alphabetical':
+                        return 'A'.repeat(part.partInput.end);
+                    case 'alphanumeric':
+                        return 'A1'.repeat(Math.floor(part.partInput.end / 2));
+                    case 'numerical':
+                        return '1'.repeat(part.partInput.end);
+                    case 'special':
+                        return part.partInput;
+                    default:
+                        return '';
+                }
+            }).join('');
+        }
+
+        async function compareCSV() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert("Please upload a CSV file.");
+                return;
+            }
+
+            const regex = generateRegexFromForm();
+            const resultsContainer = document.getElementById('comparisonResults');
+            resultsContainer.innerHTML = '';
+
+            const text = await file.text();
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+
+            lines.forEach(value => {
+                const isValid = new RegExp(regex, 'i').test(value); // Added 'i' flag for case-insensitivity
+                const resultText = `${value}: ${isValid ? 'Valid' : 'Invalid'}`;
+                const resultDiv = document.createElement('div');
+                resultDiv.textContent = resultText;
+                resultsContainer.appendChild(resultDiv);
+            });
+        }
+
+        function generateRegexFromForm() {
+            const parts = [];
+            for (let i = 1; i <= partCounter; i++) {
+                const partType = document.querySelector(`select[name="partType-${i}"]`);
+                if (partType) {
+                    const typeValue = partType.value;
+                    let partInput;
+                    if (typeValue === 'special') {
+                        partInput = document.querySelector(`input[name="specialChar-${i}"]`).value;
+                        parts.push({ partType: typeValue, partInput });
+                    } else {
+                        const start = document.querySelector(`input[name="rangeStart-${i}"]`).value;
+                        const end = document.querySelector(`input[name="rangeEnd-${i}"]`).value;
+                        partInput = { start, end };
+                        parts.push({ partType: typeValue, partInput });
+                    }
+                }
+            }
+            return generateRegex(parts);
+        }
+    </script>
+</body>
+</html>
