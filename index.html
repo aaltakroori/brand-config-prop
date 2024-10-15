@@ -96,6 +96,9 @@
     <div class="container">
         <h2>Supplier SKU Brand Config</h2>
         <form id="skuForm">
+            <label for="supplierLE">Supplier Legal Entity:</label>
+            <input type="text" id="supplierLE" name="supplierLE" required>
+
             <label for="brandCode">Brand Code:</label>
             <input type="text" id="brandCode" name="brandCode" required>
 
@@ -111,7 +114,9 @@
         </form>
 
         <div class="upload-container">
+            <br>
             <h4>Upload CSV for Comparison (at least 5 lines)</h4>
+            <span style="color: #c82333;">Note: Put all the values in the first column without header</span>
             <input type="file" id="fileInput" accept=".csv" required>
         </div>
 
@@ -233,7 +238,7 @@
             const specialCharInput = document.querySelector(`input[name="specialChar-${partNumber}"]`);
             const errorDiv = document.getElementById(`error-${partNumber}`);
 
-            if (specialCharInput.value.length > 1) {
+            if (specialCharInput.value.length != 1) {
                 errorDiv.textContent = 'Please enter only one special character.';
                 errorDiv.style.display = 'block';
             } else {
@@ -241,12 +246,13 @@
             }
         }
 
-        function handleSubmit(event) {
+        async function handleSubmit(event) {
             event.preventDefault();
 
             const formData = new FormData(document.getElementById('skuForm'));
             const partsData = [];
             const brandCode = formData.get('brandCode');
+            const supplier = formData.get('supplierLE');
             const type = formData.get('type');
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
@@ -274,7 +280,7 @@
                         const startNum = parseInt(start, 10);
                         const endNum = parseInt(end, 10);
 
-                        if (isNaN(startNum) || isNaN(endNum) || startNum >= endNum) {
+                        if (isNaN(startNum) || isNaN(endNum) || startNum > endNum) {
                             alert('Please ensure all ranges are valid (start < end).');
                             return;
                         }
@@ -295,7 +301,35 @@
                 return;
             }
 
-            readCSVAndCompare(file, brandCode, type, partsData);
+            const regex = generateRegex(partsData);
+            const invalidRowsCount = await readCSVAndCompare(file, brandCode, type, partsData);
+
+            if (invalidRowsCount === 0) {
+                const apiUrl = `https://script.google.com/macros/s/AKfycbw66H7-bMOF1-aqzg-eTt_uKEuZR9DYBRtyZ-mvFaoGJXlASHm9kycRDmeXpq4jyaZi/exec`;
+                var data = {
+                    'brand_code': brandCode,
+                    'type': type,
+                    'regex': regex,
+                    'supplier_legal_entity': supplier
+                }
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        body: JSON.stringify(data)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+
+                    const result = await response.json();
+                    console.log(result);
+                    alert('Data submitted successfully!');
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('There was an error submitting the data.');
+                }
+            }
         }
 
         async function readCSVAndCompare(file, brandCode, type, partsData) {
@@ -314,7 +348,15 @@
                 return `${value}: ${isValid ? 'Valid' : 'Invalid'}`;
             });
 
-            alert(`Brand Code: ${brandCode}\nType: ${type}\n\nGenerated Regex: ${regex}\nExample: ${example}\n\nResults:\n${results.join('\n')}`);
+            const invalidRowsCount = results.filter(result => result.includes('Invalid')).length
+            console.log(results)
+            console.log(results.filter(result => result.includes('Invalid')))
+            console.log(invalidRowsCount)
+            if (invalidRowsCount !== 0) {
+                alert(`Brand Code: ${brandCode}\nType: ${type}\n\nGenerated Regex: ${regex}\nExample: ${example}\n\nResults:\n${results.join('\n')}`);
+            }
+
+            return invalidRowsCount;
         }
 
         function generateRegex(parts) {
